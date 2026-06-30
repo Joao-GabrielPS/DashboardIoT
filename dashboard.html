@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>HydroMonitor — Monitor de Reservatório</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+    background: linear-gradient(135deg, #e0f2fe 0%, #ffffff 50%, #eff6ff 100%);
+    color: #1e293b;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  .bg-blobs {
+    position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0;
+  }
+  .blob { position: absolute; border-radius: 50%; filter: blur(80px); opacity: .45; }
+  .blob-1 { width: 400px; height: 400px; background: #7dd3fc; top: -80px; left: -60px; }
+  .blob-2 { width: 400px; height: 400px; background: #93c5fd; bottom: -80px; right: -60px; }
+
+  .container {
+    position: relative; z-index: 1;
+    max-width: 1200px; margin: 0 auto; padding: 32px 16px;
+  }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 32px; flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-icon {
+    width: 48px; height: 48px; border-radius: 16px;
+    background: linear-gradient(135deg, #0ea5e9, #2563eb);
+    display: grid; place-items: center;
+    box-shadow: 0 8px 24px -8px rgba(37,99,235,0.4);
+  }
+  .brand-icon svg { width: 24px; height: 24px; color: white; }
+  .brand h1 { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.02em; color: #0f172a; }
+  .brand p { font-size: 0.85rem; color: #64748b; }
+
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    border-radius: 999px; padding: 6px 14px; font-size: 0.75rem; font-weight: 600;
+    border: 1px solid; backdrop-filter: blur(8px);
+  }
+  .pill-online { background: rgba(236,253,245,0.9); border-color: #a7f3d0; color: #047857; }
+  .pill-offline { background: rgba(255,241,242,0.9); border-color: #fecdd3; color: #be123c; }
+  .sound-btn {
+    border-radius: 999px; padding: 6px 14px; font-size: 0.75rem; font-weight: 600;
+    border: 1px solid #e2e8f0; background: rgba(255,255,255,0.85); color: #475569;
+    cursor: pointer; backdrop-filter: blur(8px); transition: all 0.2s;
+  }
+  .sound-btn:hover { background: #fff; }
+
+  .alert-banner {
+    display: flex; align-items: center; gap: 12px;
+    border-radius: 16px; padding: 16px; margin-bottom: 24px;
+    border: 1px solid; font-size: 0.9rem;
+  }
+  .alert-high { background: #fffbeb; border-color: #fcd34d; color: #92400e; animation: pulseSoft 2s infinite; }
+  .alert-full { background: linear-gradient(90deg, #f43f5e, #e11d48); border-color: #fda4af; color: #fff; animation: pulseStrong 1.2s infinite; }
+  @keyframes pulseSoft {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0.35); }
+    50% { box-shadow: 0 0 0 14px rgba(245,158,11,0); }
+  }
+  @keyframes pulseStrong {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(244,63,94,0.5); }
+    50% { box-shadow: 0 0 0 18px rgba(244,63,94,0); }
+  }
+
+  .grid-layout { display: grid; gap: 24px; }
+  @media (min-width: 1024px) {
+    .grid-layout { grid-template-columns: 1fr 2fr; }
+    .bottle-card { grid-row: span 2; }
+  }
+
+  .card {
+    background: rgba(255,255,255,0.72);
+    border: 1px solid rgba(226,232,240,0.7);
+    border-radius: 24px; padding: 24px;
+    box-shadow: 0 20px 60px -20px rgba(14,165,233,0.12), 0 1px 3px rgba(0,0,0,0.04);
+    backdrop-filter: blur(12px);
+  }
+  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .card-header h2 { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; }
+
+  /* Bottle */
+  .bottle-wrap { position: relative; width: 100%; height: 420px; display: flex; align-items: flex-end; justify-content: center; }
+  .bottle-wrap svg { width: 100%; height: 100%; max-width: 220px; }
+  .bottle-percent {
+    position: absolute; bottom: 32px; left: 50%; transform: translateX(-50%);
+    background: rgba(255,255,255,0.85); border-radius: 16px; padding: 10px 20px;
+    box-shadow: 0 10px 30px -10px rgba(2,132,199,0.25); backdrop-filter: blur(8px);
+    text-align: center;
+  }
+  .bottle-percent .big { font-size: 2.2rem; font-weight: 900; color: #0f172a; font-variant-numeric: tabular-nums; }
+  .bottle-percent .small { font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #64748b; }
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    border-radius: 999px; padding: 4px 12px; font-size: 0.75rem; font-weight: 700;
+    background: #fff; border: 1px solid;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  /* Stats */
+  .stats-grid { display: grid; gap: 16px; grid-template-columns: repeat(2, 1fr); }
+  .stat-card {
+    background: rgba(255,255,255,0.6);
+    border: 1px solid rgba(226,232,240,0.5);
+    border-radius: 20px; padding: 18px;
+    display: flex; flex-direction: column; gap: 6px;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .stat-card:hover { transform: translateY(-2px); box-shadow: 0 12px 30px -12px rgba(14,165,233,0.15); }
+  .stat-card .label { font-size: 0.75rem; color: #64748b; font-weight: 600; }
+  .stat-card .value { font-size: 1.6rem; font-weight: 800; color: #0f172a; }
+  .stat-card .sub { font-size: 0.7rem; color: #94a3b8; }
+
+  .tone-sky .value { color: #0284c7; }
+  .tone-blue .value { color: #2563eb; }
+  .tone-emerald .value { color: #059669; }
+  .tone-rose .value { color: #e11d48; }
+  .tone-indigo .value { color: #4f46e5; }
+
+  /* Chart */
+  .chart-wrap { width: 100%; height: 260px; position: relative; }
+
+  /* Footer info */
+  .footer-info {
+    display: grid; gap: 12px; margin-top: 24px;
+    grid-template-columns: repeat(3, 1fr);
+  }
+  @media (max-width: 640px) {
+    .footer-info { grid-template-columns: 1fr; }
+    .stats-grid { grid-template-columns: 1fr; }
+    header { flex-direction: column; align-items: flex-start; }
+  }
+  .info-line {
+    display: flex; align-items: center; justify-content: space-between;
+    background: rgba(255,255,255,0.6); border: 1px solid rgba(226,232,240,0.5);
+    border-radius: 16px; padding: 12px 16px; font-size: 0.85rem;
+  }
+  .info-line .muted { color: #64748b; }
+  .info-line .accent { font-weight: 700; }
+
+  .copyright { text-align: center; margin-top: 24px; font-size: 0.7rem; color: #94a3b8; }
+</style>
+</head>
+<body>
+
+<div class="bg-blobs">
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+</div>
+
+<div class="container">
+
+  <header>
+    <div class="brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0L12 2.69z"/></svg>
+      </div>
+      <div>
+        <h1>HydroMonitor Dashboard</h1>
+        <p>Monitoramento IoT — Sensor Ultrassônico HC-SR04</p>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <button class="sound-btn" id="soundBtn">Som: OFF</button>
+      <span class="status-pill pill-online" id="connPill">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/></svg>
+        Conectado
+      </span>
+    </div>
+  </header>
+
+  <div id="alertBox"></div>
+
+  <div class="grid-layout">
+    <div class="card bottle-card">
+      <div class="card-header">
+        <h2>Reservatório</h2>
+        <span class="status-badge" id="statusBadge">
+          <span class="dot" id="statusDot"></span>
+          <span id="statusText">—</span>
+        </span>
+      </div>
+
+      <div class="bottle-wrap">
+        <svg viewBox="0 0 200 380" id="bottleSvg">
+          <defs>
+            <clipPath id="bottleClip">
+              <path d="M80 10 H120 V35 Q120 50 135 65 Q170 100 170 150 V340 Q170 370 140 370 H60 Q30 370 30 340 V150 Q30 100 65 65 Q80 50 80 35 Z" />
+            </clipPath>
+            <linearGradient id="waterGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#7dd3fc" />
+              <stop offset="100%" stop-color="#0284c7" />
+            </linearGradient>
+          </defs>
+
+          <!-- Glass fill -->
+          <path d="M80 10 H120 V35 Q120 50 135 65 Q170 100 170 150 V340 Q170 370 140 370 H60 Q30 370 30 340 V150 Q30 100 65 65 Q80 50 80 35 Z"
+            fill="rgba(186,230,253,0.15)" stroke="#7dd3fc" stroke-width="2" />
+
+          <!-- Water group clipped to bottle -->
+          <g clip-path="url(#bottleClip)">
+            <g id="waterGroup" style="transition: transform 1.4s cubic-bezier(0.4,0,0.2,1);">
+              <!-- Wave 1 -->
+              <path d="M-200 20 Q-150 0 -100 20 T0 20 T100 20 T200 20 T300 20 T400 20 V400 H-200 Z"
+                fill="url(#waterGrad)" opacity="0.95">
+                <animateTransform attributeName="transform" type="translate" from="0 0" to="200 0" dur="4s" repeatCount="indefinite" />
+              </path>
+              <!-- Wave 2 -->
+              <path d="M-200 25 Q-150 10 -100 25 T0 25 T100 25 T200 25 T300 25 T400 25 V400 H-200 Z"
+                fill="#38bdf8" opacity="0.5">
+                <animateTransform attributeName="transform" type="translate" from="-100 0" to="100 0" dur="6s" repeatCount="indefinite" />
+              </path>
+            </g>
+          </g>
+
+          <!-- Outline -->
+          <path d="M80 10 H120 V35 Q120 50 135 65 Q170 100 170 150 V340 Q170 370 140 370 H60 Q30 370 30 340 V150 Q30 100 65 65 Q80 50 80 35 Z"
+            fill="none" stroke="#38bdf8" stroke-width="3" />
+          <!-- Cap -->
+          <rect x="78" y="0" width="44" height="14" rx="3" fill="#0e7490" />
+        </svg>
+
+        <div class="bottle-percent">
+          <div class="big" id="levelBig">0%</div>
+          <div class="small">Nível</div>
+        </div>
+      </div>
+
+      <p style="text-align:center;margin-top:16px;font-size:0.85rem;color:#64748b;" id="statusDesc">—</p>
+    </div>
+
+    <div class="stats-grid" id="statsGrid"></div>
+
+    <div class="card" style="grid-column: 1 / -1;">
+      <div class="card-header">
+        <div>
+          <h2>Histórico</h2>
+          <p style="font-size:0.7rem;color:#94a3b8;margin-top:2px;">Evolução do nível ao longo do tempo</p>
+        </div>
+        <span style="background:#e0f2fe;border-radius:999px;padding:4px 12px;font-size:0.75rem;font-weight:700;color:#0369a1;" id="readingsCount">0 leituras</span>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="historyChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer-info">
+    <div class="info-line"><span class="muted">Última leitura</span><span class="accent" id="lastTime">—</span></div>
+    <div class="info-line"><span class="muted">Data</span><span class="accent" id="lastDate">—</span></div>
+    <div class="info-line"><span class="muted">Status do sensor</span><span class="accent" id="sensorStatus">—</span></div>
+  </div>
+
+  <p class="copyright">AquaSense IoT • Dados simulados para demonstração</p>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script src="dashboard.js"></script>
+</body>
+</html>
