@@ -26,7 +26,7 @@ Uma dashboard desenvolvida para monitorar o nível de uma caixa d'água em tempo
 
 ## 📸 Demonstração
 
-https://dashboard-io-t-seven.vercel.app/
+https://hydromonitor-infoh-seven.vercel.app/
 
 ## 📄 Licença MIT
 
